@@ -9,9 +9,13 @@ from __future__ import division # for / and //
 from collections import Counter # for merge dict
 from itertools import permutations    # for N! permutations
 import numpy as np
+'''
+import matplotlib as mpl        # for Linux VM-129-211-ubuntu 4.4.0-135-generic
+mpl.use('Agg')
+'''
 import matplotlib.pyplot as plt
 
-from tools import Init
+from tools import Init  # call Init function
 
 def HashIdxPrefix(string):
     idxFlag = 0     # 0 is exact, -1 is wildcard, else is prefix
@@ -119,113 +123,6 @@ def MaxCompressedPresent(FieldInfoList, FileList):
     return ResultList
 
 '''
-###############################################################################
-'''
-
-#RuleList, linenum = Init("ACL1_10K") # [RID, sa, da, sp, dp, prtcl]
-#N = len(RuleList)
-#
-#FieldList = []
-#for i in range(N):
-#    FieldList.append([RuleList[i][0], RuleList[i][3]])
-#Num1 = 0
-#RulepDicDP = {}
-#for item in FieldList:
-#    if item[1] != '*'*16:
-#        Num1 += 1
-#        RulepDicDP[item[0]] = 0
-#        
-#FieldList = []  #FieldList[i] <- [RID, FieldValue]
-#for i in range(N):wildcardNum
-#    FieldList.append([RuleList[i][0], RuleList[i][3]]) 
-#L = 16
-#p1, M1, idx1, Np1, NpDic1, RulepDic =  FindP_Np(FieldList, L, N, {})
-#print (104*N - p1*Np1) / (104*N)  # 104 is five-tuple bit length
-
-
-'''
-##  Find first p bit of Field_n ###############################################
-'''
-#FieldInfoList = [('sa', 8), ('da', 8), ('sp', 16), ('dp', 16), ('prtcl', 8)]
-#FieldInfoList = [('sa', 8)]
-#ResultList = []
-#FileList = ['ACL1_10K', 'ACL2_10K', 'ACL3_10K', 'ACL4_10K', 'ACL5_10K',\
-#             'FW1_10K', 'FW2_10K', 'FW3_10K', 'FW4_10K', 'FW5_10K',\
-#             'IPC1_10K', 'IPC2_10K']
-#
-#for m in range(len(FileList)):
-#    RuleList, linenum = Init(FileList[m]) # [RID, sa, da, sp, dp, prtcl]
-#    N = len(RuleList)
-#    tmpresult = []
-#    for n in range(len(FieldInfoList)):
-#        FieldList = []  #FieldList[i] <- [RID, FieldValue, wildcardPosition]
-#        for i in range(N):
-#            wildcardFlag = RuleList[i][n+1].find('*')
-#            FieldList.append([RuleList[i][0], RuleList[i][n+1], wildcardFlag])
-#        L = FieldInfoList[n][1]
-#        #for L in range(16, 20, 2):
-#        p, M, idx, Np, NpDic, RulepDic =  FindP_Np(FieldList, L, N, {})#RulepDicSP)
-#        tmpresult.append((L, FieldInfoList[n][0], (p*Np) / (104*N), idx))  # 104 is five-tuple bit length
-#    ResultList.append((FileList[m], tmpresult))
-#    print("m = ", m)
-#
-#f = open('Result.txt', 'w')
-#for item in ResultList:
-#    f.write(str(item) + '\n')
-#f.close()
-
-'''
-##  Find last p bit wildcard of Field_m    ###################################
-'''
-#FieldInfoList = [('sa', 32), ('da', 32), ('sp', 16), ('dp', 16), ('prtcl', 8)]
-##FieldInfoList = [('sa', 32)]
-#ResultList = []
-#FileList = ['ACL1_10K', 'ACL2_10K', 'ACL3_10K', 'ACL4_10K', 'ACL5_10K',\
-#             'FW1_10K', 'FW2_10K', 'FW3_10K', 'FW4_10K', 'FW5_10K',\
-#             'IPC1_10K', 'IPC2_10K']
-#
-#for m in range(len(FileList)):
-#    RuleList, linenum = Init(FileList[m]) # [RID, sa, da, sp, dp, prtcl]
-#    N = len(RuleList)
-#    tmpresult = []
-#    for n in range(len(FieldInfoList)):
-#        FieldList = []  #FieldList[i] <- [RID, FieldValue, wildcardPosition]
-#        for i in range(N):
-#            wildcardFlag = RuleList[i][n+1].find('*')
-#            FieldList.append([RuleList[i][0], RuleList[i][n+1], wildcardFlag])
-#        Lm = FieldInfoList[n][1]
-#        #for Lm in range(16, 20, 2):
-#        p, Np, MemDic, RulepDic =  FindP_Np_wildcard(FieldList, Lm, N, {})#RulepDicSP)
-#        tmpresult.append((Lm, FieldInfoList[n][0], (p*Np) / (104*N), p, Np))  # 104 is five-tuple bit length
-#    ResultList.append((FileList[m], tmpresult))
-#    print("m = ", m)
-#
-#f = open('Result.txt', 'w')
-#for item in ResultList:
-#    f.write(str(item) + '\n')
-#f.close()
-#
-#
-##   https://blog.csdn.net/liangzuojiayi/article/details/78187704 
-#tmpcnames = ['royalblue', 'crimson', 'forestgreen', 'darkorchid', 'darkorange']
-#plt.figure(figsize=(16,9))
-#setwidth = 0.15
-#for n in range(len(FieldInfoList)):
-#    x = [i+1+n*setwidth for i in range(len(ResultList))]
-#    y = []
-#    for j in range(len(ResultList)):
-#        tmpList = ResultList[j][1]
-#        y.append(tmpList[n][2])
-#    plt.bar(x, y, alpha=0.9, width = setwidth, facecolor = tmpcnames[n], edgecolor = 'white', label='$'+FieldInfoList[n][0].upper()+'$', lw=1)
-#x = [i+1+(len(FieldInfoList) / 2)*setwidth for i in range(len(ResultList))]
-#plt.xticks(x, ('ACL1', 'ACL2', 'ACL3', 'ACL4', 'ACL5', 'FW1', 'FW2', 'FW3', 'FW4', 'FW5', 'IPC1', 'IPC2'))
-#plt.ylabel("Percent")
-#plt.title('Field Compressed')
-#plt.legend(loc='upper right') #'lower right') 'best')
-#plt.legend()
-#plt.show()
-
-'''
 ##  Find last p bit wildcard of Field_m --> Combination    ####################
 '''
 
@@ -256,7 +153,7 @@ def CombinationFind(RuleList, N, FieldInfoList, foundFieldDic, RulepDicOld, stri
             Lm = FieldInfoList[n][1]
             p, Np, MemDic, RulepDic =  FindP_Np_wildcard(FieldList, Lm, len(FieldList), {})
             tmpresult.append((Lm, FieldInfoList[n][0], (p*Np) / (104*N), p, Np))  # 104 is five-tuple bit length
-            tmpNumList.append(p*Np)
+            tmpNumList.append((p*Np) // (stride_s*cluster_n))     # Greedy choice way, or: (p*Np) // (stride_s*cluster_n)
             tmpFieldList.append([n, RulepDic])
             #print('n = ', n)
     maxidx = tmpNumList.index(max(tmpNumList))
@@ -431,6 +328,12 @@ def CombinationMix(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
             h_tmpResultDic = {}
             tmplist = []
             for ch in range(len(h_CombinationResult)):
+                #'''
+                FieldName = h_CombinationResult[ch][1][1]
+                pNum = h_CombinationResult[ch][1][-1]
+                pLen = h_CombinationResult[ch][1][-2]
+                print(cv, ch, pLen, pNum, FieldName)
+                #'''
                 tmplist = list(h_CombinationResult[ch][0])
                 tmplist.sort()
                 M = 0
@@ -458,17 +361,18 @@ def CombinationMix(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
         M = 0
         v_tmpResultDic = {}
         v_tmpRIDOrderDic = {}   # Need to Fix 2018.12.14
-        tmpList = []
         tmpcurrentlist = list(AllRuleSet)
         for cv in range(len(v_CombinationResult)):
-            
-            tmpDic = v_CombinationResult[cv]
-            tmplt = list(tmpDic[cv][0])  # has been sorted !
-            tmpList += tmplt
+            # Order RID
+            tmpList = []
+            for cr in range(0, cv):
+                tmpDic = v_CombinationResult[cr]
+                tmplt = list(tmpDic[cv][0])  # has been sorted !
+                tmpList += tmplt
             tmplt = list(AllRuleSet - set(tmpList))
             tmplt.sort()
             tmpcurrentlist = tmpList + tmplt
-            
+            # Compute M
             M = 0
             for cN in range(0, cv+1):
                 M += v_CombinationResult[cN][cv][1]
@@ -479,14 +383,24 @@ def CombinationMix(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
             #M = wildcardMatrixCount * stride_s * cluster_n
             '''
             v_tmpResultDic[cv] = M / (104*N)
-            v_tmpRIDOrderDic[cv] = tmpcurrentlist
+            v_tmpRIDOrderDic[cv] = tuple(tmpcurrentlist)
         for cv in range(len(v_CombinationResult), CombinationNum):
+            # Order RID
+            tmpList = []
+            for cr in range(0, len(v_CombinationResult)):
+                tmpDic = v_CombinationResult[cr]
+                tmplt = list(tmpDic[cv][0])  # has been sorted !
+                tmpList += tmplt
+            tmplt = list(AllRuleSet - set(tmpList))
+            tmplt.sort()
+            tmpcurrentlist = tmpList + tmplt
+            # Compute M
             M = 0
             for cN in range(0, len(v_CombinationResult)):
                 M += v_CombinationResult[cN][cv][1]
             v_tmpResultDic[cv] = M / (104*N)
-            v_tmpRIDOrderDic[cv] = tmpcurrentlist
-        print('Mix', FileList[m],M / (104*N))
+            v_tmpRIDOrderDic[cv] = tuple(tmpcurrentlist)
+        print('Mix', FileList[m],M / (104*N), len(tmpcurrentlist), N, N/linenum, len(v_CombinationResult))
         #print(v_tmpResultDic)
         ResultList.append(v_tmpResultDic)
         RIDOrderList.append(v_tmpRIDOrderDic)
@@ -520,18 +434,46 @@ def Combination_ViolentSearch(FieldInfoList, FileList, CombinationNum, stride_s,
         print('ViolentSearch', FileList[m],M / (104*N))
     return ResultList
 
-def DrawFCT_Combination(CMD, CombinationNum):
-    stride_s = 4
-    cluster_n = 8
+def OrderRuleList(FieldInfoList, FileList, RIDOrderList, CombinationNum, stride_s, cluster_n):
+    if len(FileList) != len(RIDOrderList):
+        print('Error')
+        return False
+    for m in range(len(FileList)):
+        RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
+        fw = open('Order_'+str(CombinationNum)+'_'+str(stride_s)+'_'+str(cluster_n)+FileList[m], 'w')
+        for n in RIDOrderList[m][CombinationNum-1]:
+            fw.write('\t'.join(RuleList[n][1:])+'\n')
+        fw.close()
+    return True
+
+def CountResultRule(FieldInfoList, FileList, RIDOrderList, CombinationNum, stride_s, cluster_n):
+    if len(FileList) != len(RIDOrderList):
+        print('Error')
+        return []
+    CountResultList = []
+    for m in range(len(FileList)):
+        RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
+        L = 104     # five-tuple
+        N = len(RuleList)
+        
+        OldAllFieldList = [''.join(RuleList[n][1:]) for n in range(N)]
+        OldwildcardMatrixCount = CountWildcardMatrix(OldAllFieldList, L, N, stride_s, cluster_n)
+        
+        tmpAllFieldList = [''.join(RuleList[n][1:]) for n in RIDOrderList[m][CombinationNum-1]]
+        wildcardMatrixCount = CountWildcardMatrix(tmpAllFieldList, L, N, stride_s, cluster_n)
+        CountResultList.append((FileList[m], (wildcardMatrixCount*stride_s*cluster_n) / (104 * N), (OldwildcardMatrixCount*stride_s*cluster_n) / (104 * N)))
+    return CountResultList
+
+def DrawFCT_Combination(CMD, CombinationNum, stride_s, cluster_n):
     FieldInfoList = [('sa', 32), ('da', 32), ('sp', 16), ('dp', 16), ('prtcl', 8)]
     #FieldInfoList = [('sa', 32)]
     ResultList = []
     FileList = ['ACL1_10K', 'ACL2_10K', 'ACL3_10K', 'ACL4_10K', 'ACL5_10K',\
                  'FW1_10K', 'FW2_10K', 'FW3_10K', 'FW4_10K', 'FW5_10K',\
                  'IPC1_10K', 'IPC2_10K']
-    #FileList = ['ACL1_10K']
+    #FileList = ['FW4_10K']
     TitleCMD = ''
-    print('CombinationNum = ', CombinationNum)
+    print('CombinationNum = '+str(CombinationNum)+' | stride_s= '+str(stride_s)+', cluster_n='+str(cluster_n))
     
     if CMD == 'h' :
         ResultList, RIDOrderList = CombinationHorizontal(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
@@ -539,15 +481,21 @@ def DrawFCT_Combination(CMD, CombinationNum):
     elif CMD =='v' :
         ResultList, RIDOrderList = CombinationVertical(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
         TitleCMD = 'Vertical'
-    else:
+    elif CMD == 'mix':
         ResultList, RIDOrderList = CombinationMix(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
         TitleCMD = 'Mix'
+    else:
+        print('Error')
+        return
     ##print('len(ResultList)', len(ResultList))
+    '''
+    OrderRuleList(FieldInfoList, FileList, RIDOrderList, CombinationNum, stride_s, cluster_n)
+    '''
     #ViolentResultList = Combination_ViolentSearch(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
     MaxResultList = MaxCompressedPresent(FieldInfoList, FileList)   # MaxResultList[i] <- (FileName, M / 104*N)
     
     #   https://blog.csdn.net/liangzuojiayi/article/details/78187704 
-    tmpcnames = ['royalblue', 'crimson', 'forestgreen', 'darkorchid', 'darkorange']
+    tmpcnames = ['royalblue', 'crimson', 'forestgreen', 'darkorchid', 'darkorange', 'gainsboro']
     plt.figure(figsize=(16,9))
     setwidth = 0.15
     for n in range(CombinationNum):
@@ -578,21 +526,98 @@ def DrawFCT_Combination(CMD, CombinationNum):
     plt.title('Field Compressed Combination-'+TitleCMD)
     plt.legend(loc='upper right') #'lower right') 'best')
     plt.legend()
-    plt.savefig('./pic/Field Compressed Combination-'+TitleCMD+'.jpeg')
+    plt.savefig('./pic/Field Compressed Combination-'+TitleCMD+'_'+str(stride_s)+'_'+str(cluster_n)+'.jpeg')
     #plt.show()
 
+def DrawFCT_Mix_Compare(CombinationNum, stride_s, cluster_n):
+    FieldInfoList = [('sa', 32), ('da', 32), ('sp', 16), ('dp', 16), ('prtcl', 8)]
+    #FieldInfoList = [('sa', 32)]
+    ResultList = []
+    FileList = ['ACL1_10K', 'ACL2_10K', 'ACL3_10K', 'ACL4_10K', 'ACL5_10K',\
+                 'FW1_10K', 'FW2_10K', 'FW3_10K', 'FW4_10K', 'FW5_10K',\
+                 'IPC1_10K', 'IPC2_10K']
+    #FileList = ['ACL2_10K']
+    TitleCMD = 'Compare'
+    print('CombinationNum = '+str(CombinationNum)+' | stride_s= '+str(stride_s)+', cluster_n='+str(cluster_n))
+    
+    ResultList, RIDOrderList = CombinationMix(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
+    ##print('len(ResultList)', len(ResultList))
+    '''
+    OrderRuleList(FieldInfoList, FileList, RIDOrderList, CombinationNum, stride_s, cluster_n)
+    '''
+    CountResultList = CountResultRule(FieldInfoList, FileList, RIDOrderList, CombinationNum, stride_s, cluster_n)
+    #ViolentResultList = Combination_ViolentSearch(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
+    MaxResultList = MaxCompressedPresent(FieldInfoList, FileList)   # MaxResultList[i] <- (FileName, M / 104*N)
+    #   https://blog.csdn.net/liangzuojiayi/article/details/78187704 
+    tmpcnames = ['royalblue', 'crimson', 'forestgreen', 'darkorchid', 'darkorange', 'gainsboro']
+    plt.figure(figsize=(16,9))
+    setwidth = 0.15
+    n = -1
+    
+    '''
+    # --Old--
+    n += 1
+    x = [i+1+n*setwidth for i in range(len(CountResultList))]
+    y = []
+    for j in range(len(CountResultList)):
+        y.append(CountResultList[j][2])
+    plt.bar(x, y, alpha=0.9, width = setwidth, facecolor = tmpcnames[n], edgecolor = 'white', label='$OLD$', lw=1)     # hatch = /, \, |, -, +, x, o, O, ., *
+    '''
+    # --Mix--
+    n += 1
+    x = [i+1+n*setwidth for i in range(len(ResultList))]
+    y = []
+    for j in range(len(ResultList)):
+        tmpResultDic = ResultList[j]
+        y.append(tmpResultDic[CombinationNum-1] / MaxResultList[j][1])
+    plt.bar(x, y, alpha=0.9, width = setwidth, facecolor = tmpcnames[n], edgecolor = 'white', label='$Mix-'+str(CombinationNum)+'$', lw=1)     # hatch = /, \, |, -, +, x, o, O, ., *
+    # --Count--
+    n += 1
+    x = [i+1+n*setwidth for i in range(len(CountResultList))]
+    y = []
+    for j in range(len(CountResultList)):
+        y.append(CountResultList[j][1] / MaxResultList[j][1])
+    plt.bar(x, y, alpha=0.9, width = setwidth, facecolor = tmpcnames[n], edgecolor = 'white', label='$CountMatrix$', lw=1)     # hatch = /, \, |, -, +, x, o, O, ., *
+    '''
+    # --Violent--
+    x = [i+1+(n+1)*setwidth for iFileList in range(len(ViolentResultList))]
+    y = []
+    for j in range(len(ViolentResultList)):
+        y.append(ViolentResultList[j][1])
+    plt.bar(x, y, alpha=0.9, width = setwidth, facecolor = tmpcnames[n+1], edgecolor = 'white', label='$ViolentCompressed$', lw=1)     # hatch = /, \, |, -, +, x, o, O, ., *
+    '''
+    '''
+    # --Max--
+    n += 1
+    x = [i+1+n*setwidth for i in range(len(MaxResultList))]
+    y = []
+    for j in range(len(MaxResultList)):
+        y.append(MaxResultList[j][1])
+    plt.bar(x, y, alpha=0.9, width = setwidth, facecolor = tmpcnames[n], edgecolor = 'white', label='$MaxCompressed$', lw=1)     # hatch = /, \, |, -, +, x, o, O, ., *
+    '''
+    x = [i+1+(n/2)*setwidth for i in range(len(ResultList))]
+    plt.xticks(x, tuple(FileList))
+    plt.ylabel("Percent")
+    plt.title('Field Compressed Combination-'+TitleCMD)
+    plt.legend(loc='upper right') #'lower right') 'best')
+    plt.legend()
+    plt.savefig('./pic/Field Compressed Combination-'+TitleCMD+'_'+str(stride_s)+'_'+str(cluster_n)+'.jpeg')
+    #plt.show()
 
 import click
 @click.command()
-@click.option('-cmd', type=str, required=True, help='Combination kind: h, v, mix')
+@click.option('-cmd', type=click.Choice(['h','v', 'mix']), required=True, help='Combination kind: Horizontal(h), Vertical(v), Mix(mix)')
 @click.option('-cbn', type=int, required=True, help='Combination numbers')
+@click.option('--stride', type=int, default=4, help='stride_s, default is 4')
+@click.option('--cluster', type=int, default=8, help='cluster_n, default is 8')
 
-def process(cmd, cbn):
+def process(cmd, cbn, stride, cluster):
     """Ex. process.py -cmd=h -cbn=4"""
-    click.echo(DrawFCT_Combination(cmd, cbn))
+    click.echo(DrawFCT_Combination(cmd, cbn, stride, cluster))
 
 
 if __name__ == "__main__":
     process()
 
-#DrawFCT_Combination('mix', 4)
+#DrawFCT_Combination('mix', 5, 4, 8)
+#DrawFCT_Mix_Compare(5, 4, 8)
