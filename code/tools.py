@@ -159,7 +159,7 @@ def Init(FileName):
         string = int2binary(BitLen, i)
         trie.insert(string)
     
-    f = open(FileName, 'r')
+    f = open('../data/'+FileName, 'r')
     line = f.readline()
     RID = 0
     RuleList = []
