@@ -1,5 +1,5 @@
-# FCTP
-Field Compressed Two-dimensional Pipeline
+# WeeTP
+Wildcard-removed Two-dimensional Pipeline
 
 ## Requirements
 - python 2.7+/3.0+
