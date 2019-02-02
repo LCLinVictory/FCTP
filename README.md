@@ -1,4 +1,4 @@
-# WeeTP
+# WeeBV
 - Wildcard-removed Two-dimensional Pipeline (WeeTP)
 - Maximum Wildcard Overlap (MWO)
 
