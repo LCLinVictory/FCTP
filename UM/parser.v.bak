@@ -1,0 +1,332 @@
+//
+//  parser module
+//  bv2.0_programmable
+//
+//  Created by LiJunnan on 16/9/15.
+//  Copyright (c) 2016year LiJunnan. All rights reserved.
+//
+
+`timescale 1ns/1ps
+
+module parser(
+clk,
+reset,
+um2cdp_path,
+cdp2um_data_valid,
+cdp2um_data,
+um2cdp_tx_enable,
+metadata_valid,
+metadata,
+pkt_valid,
+pkt,
+transmit_usedw
+);
+
+parameter   width_meta = 288;// packet_metadata(descriptor)
+
+input         clk;
+input         reset;
+output        um2cdp_path;
+input         cdp2um_data_valid;
+input [138:0] cdp2um_data;
+output        um2cdp_tx_enable;
+
+output        metadata_valid;
+output[width_meta-1:0]  metadata;
+
+output        pkt_valid;
+output[138:0] pkt;
+input [7:0]   transmit_usedw;
+
+//------------------reg------------//
+reg           um2cdp_path; //"0":packet from cdp to UM;
+reg           um2cdp_tx_enable;
+reg           metadata_valid;
+reg   [width_meta-1:0]   metadata;
+reg   [47:0]  eth_src,eth_dst;
+reg   [15:0]  eth_type;
+reg   [15:0]  vid;
+reg   [7:0]   vlan_priority;
+reg   [31:0]  sa,da;
+reg   [7:0]   ptrl,tos;
+reg   [15:0]  sp,dp;
+
+reg           pkt_valid;// from parser to transmit;
+reg   [138:0] pkt;
+
+//--fifo--//
+reg           pkt_fifo_rden;
+wire  [138:0] pkt_fifo_out;
+wire          pkt_fifo_empty;
+wire  [7:0]   pkt_fifo_usedw;
+
+//-----------------state------------------//
+reg   [3:0]   parser_state;// parser state machine 
+
+parameter     idle            = 4'd0,
+              parser_eth_s    = 4'd1,
+              parser_ip_1_s   = 4'd2,
+              parser_ip_2_s   = 4'd3,
+              parser_vlan_1_s = 4'd4,
+              parser_vlan_2_s = 4'd5,
+              pkt_trans_s     = 4'd6,
+              
+              discard_s       = 4'd7;
+
+
+reg           cdp2um_state;// receive pkt from cdp 
+
+
+//----------------------parser_state-------------------------//
+always @ (posedge clk or negedge reset)
+begin
+    if(!reset)
+      begin
+			   metadata_valid  <= 1'b0;
+			   metadata        <= {width_meta{1'b0}};
+			   um2cdp_path	    <= 1'b0;
+			   pkt_fifo_rden   <= 1'b0;
+			   pkt_valid       <= 1'b0;
+			   
+			   parser_state    <= idle;
+      end
+    else
+      begin
+          case(parser_state)
+            idle:
+            begin
+                pkt_valid <= 1'b0;
+                if((pkt_fifo_empty == 1'b0) && (transmit_usedw < 8'd200)) begin
+                    pkt_fifo_rden <= 1'b1;
+                    parser_state  <= parser_eth_s;
+                  end
+                else begin
+                    pkt_fifo_rden <= 1'b0;
+                    parser_state  <= idle;
+                  end
+            end
+            parser_eth_s:
+            begin
+                if(pkt_fifo_out[138:136] == 3'b101)
+                  begin
+                      eth_dst   <= pkt_fifo_out[127:80];
+                      eth_src   <= pkt_fifo_out[79:32];
+                      
+                      metadata_valid  <= 1'b1;
+                      metadata        <= {pkt_fifo_out[127:80],{(width_meta-48){1'b1}}};
+                      //metadata        <= pkt_fifo_out[127:80];
+                      
+                      pkt_valid <= 1'b1;
+                      pkt       <= pkt_fifo_out;
+                      
+                      parser_state <= pkt_trans_s;
+                      /*
+                      eth_type<= parser_fifo_out[31:16];
+                      pkt <= parser_fifo_out;
+                      case(parser_fifo_out[31:16])
+                        //------ipv4------//
+                        16'h0800:
+                        begin
+                            tos <= parser_fifo_out[7:0];
+                            parser_state <= parser_ip_1;
+                            
+                            pkt_valid <= 1'b1;
+                        end
+                        //------vlan------//
+                        16'h8100:
+                        begin
+                            vid = {4'b0,parser_fifo_out[11:0]};
+                            vlan_priority = {5'b0,parser_fifo_out[15:13]};
+                          
+                            parser_state <= parser_vlan_1;
+                            
+                            pkt_valid <= 1'b1;
+                        end
+                        //------arp-------//
+                        16'h0806:
+                        begin
+                            metadata_valid <= 1'b1;
+                            metadata <= {parser_fifo_out[127:16],136'b0};
+                            parser_state <= pkt_trans;
+                            
+                            pkt_valid <= 1'b1;
+                        end
+                        default:
+                        begin
+                            parser_state <= discard;
+                        end
+                      endcase
+                      */
+                  end
+                else
+                  begin
+                      parser_state <= discard_s;
+                  end
+                
+            end
+            /*            parser_ip_1:
+            begin
+                ptrl <= parser_fifo_out[71:64];
+                sa   <= parser_fifo_out[47:16];
+                da[31:16]  <= parser_fifo_out[15:0];
+                pkt <= parser_fifo_out;
+                
+                parser_state <= parser_ip_2;
+            end
+            parser_ip_2:
+            begin
+                da[15:0]  <= parser_fifo_out[127:112];
+                sp        <= parser_fifo_out[111:96];
+                dp        <= parser_fifo_out[95:80];
+                
+                metadata_valid <= 1'b1;
+                metadata <= {eth_dst,eth_src,eth_type,24'b0,sa,da[31:16],parser_fifo_out[127:112],ptrl,tos,parser_fifo_out[111:80]};
+                
+                
+                pkt <= parser_fifo_out;
+                
+                parser_state <= pkt_trans;
+            end
+            parser_vlan_1:
+            begin
+                pkt <= parser_fifo_out;
+                if(parser_fifo_out[127:112] == 16'h0800)
+                  begin
+                      tos <= parser_fifo_out[119:112];
+                      ptrl <= parser_fifo_out[55:48];
+                      sa <= parser_fifo_out[31:0];
+                      
+                      parser_state <= parser_vlan_2;
+                  end
+                else if(parser_fifo_out[127:112] == 16'h0806)
+                  begin
+                      metadata_valid <= 1'b1;
+                      metadata <={eth_dst,eth_src,eth_type,vid,vlan_priority,112'b0};
+                      parser_state <= pkt_trans;
+                      
+                  end
+                else
+                  begin
+                      pkt_valid <= 1'b0;
+                      parser_state <= discard;
+                  end
+            end
+            parser_vlan_2:
+            begin
+                pkt <= parser_fifo_out;
+                da <= parser_fifo_out[127:96];
+                sp <= parser_fifo_out[95:80];
+                dp <= parser_fifo_out[79:64];
+                
+                metadata_valid <= 1'b1;
+                metadata <= {eth_dst,eth_src,eth_type,vid,vlan_priority,sa,parser_fifo_out[127:96],
+                            ptrl,tos,parser_fifo_out[95:64]};
+                
+                parser_state <= pkt_trans;
+            end
+            */
+            pkt_trans_s:
+            begin
+                metadata_valid <= 1'b0;
+                pkt_valid <= 1'b1;
+                pkt       <= pkt_fifo_out;
+                if(pkt_fifo_out[138:136] == 3'b110)
+                  begin
+                      pkt_fifo_rden <= 1'b0;
+                      parser_state  <= idle;
+                  end
+            end
+            
+            discard_s:
+            begin
+                if(pkt_fifo_out[138:136] == 3'b110)
+                  begin
+                      pkt_fifo_rden <= 1'b0;
+                      parser_state  <= idle;
+                  end
+                else begin
+                      pkt_fifo_rden <= 1'b1;
+                      parser_state  <= discard_s;
+                  end
+            end
+            default:
+            begin
+                parser_state <= idle;
+            end
+          endcase
+      end
+end
+
+//-------------------cdp2um_state-------------------//
+always @ (posedge clk or negedge reset)
+begin
+    if(!reset)
+      begin
+        um2cdp_tx_enable  <= 1'b0;
+        cdp2um_state      <= 1'b0;
+      end
+    else
+      begin
+        case(cdp2um_state)
+          1'b0:
+          begin
+              if((pkt_fifo_usedw <= 8'd200) && (cdp2um_data_valid == 1'b0))
+                begin
+                    um2cdp_tx_enable  <= 1'b1;
+                    cdp2um_state      <= 1'b1;
+                end
+          end
+          1'b1:
+          begin
+              if(cdp2um_data_valid == 1'b1)
+                begin
+                    um2cdp_tx_enable  <= 1'b0;
+                    cdp2um_state      <= 1'b0;
+                end
+          end
+        endcase
+      end
+end
+
+//-----------fifo----------//
+fifo_139_256 pkt_fifo(
+.aclr(!reset),
+.clock(clk),
+.data(cdp2um_data),
+.rdreq(pkt_fifo_rden),
+.wrreq(cdp2um_data_valid),
+.empty(pkt_fifo_empty),
+.full(),
+.q(pkt_fifo_out),
+.usedw(pkt_fifo_usedw)
+);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+endmodule
+
