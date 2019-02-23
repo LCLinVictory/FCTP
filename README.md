@@ -1,4 +1,5 @@
 # WeeBV
+Wildcard-removed Bit-Vector scheme, which contains:
 - Wildcard-removed Two-dimensional Pipeline (WeeTP)
 - Maximum Wildcard Overlap (MWO)
 
