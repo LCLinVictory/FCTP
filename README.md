@@ -1,7 +1,7 @@
 # WeeBV
 Wildcard-removed Bit-Vector scheme, which contains:
 - Wildcard-removed Two-dimensional Pipeline (WeeTP)
-- Maximum Wildcard Overlap (MWO)
+- Wildcard-removed Maximum Covering (MWO)
 
 ## Requirements
 - python 2.7+/3.0+
