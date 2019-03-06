@@ -1,0 +1,328 @@
+//
+//  transmit module
+//  bv2.0_programmable
+//
+//  Created by LiJunnan on 16/9/15.
+//  Copyright (c) 2016year LiJunnan. All rights reserved.
+//
+
+
+`timescale 1ns/1ps
+
+module transmit(
+clk,
+reset,
+action_valid,
+action,
+pkt_valid,
+pkt,
+um2cdp_rule_wrreq,
+um2cdp_rule,
+um2cdp_data_valid,
+um2cdp_data,
+cdp2um_rule_usedw,
+cdp2um_tx_enable,
+transmit_fifo_usedw
+);
+
+parameter     width_act = 16;
+
+
+input         clk;
+input         reset;
+input         action_valid;
+input [width_act-1:0]  action;
+input         pkt_valid;
+input [138:0] pkt;
+
+output        um2cdp_rule_wrreq;
+output[29:0]  um2cdp_rule;
+output        um2cdp_data_valid;
+output[138:0] um2cdp_data;
+input [4:0]   cdp2um_rule_usedw;
+input         cdp2um_tx_enable;
+output[7:0]   transmit_fifo_usedw;
+
+reg           um2cdp_rule_wrreq;
+reg   [29:0]  um2cdp_rule;
+reg           um2cdp_data_valid;
+reg   [138:0] um2cdp_data;
+
+
+//-------------reg-------------//
+//---fifo---//
+reg           transmit_fifo_rden;
+wire  [138:0] transmit_fifo_out;
+wire  [7:0]   transmit_fifo_usedw;
+wire          transmit_fifo_empty;
+reg           action_fifo_rden;
+wire  [15:0]  action_fifo_out;
+wire  [7:0]   action_fifo_usedw;
+wire          action_fifo_empty;
+
+//---ram---//
+reg   [7:0]   addr_a,addr_b;
+reg   [138:0] data_a,data_b;
+reg           wren_a,wren_b;
+reg           rden_a,rden_b;
+wire  [138:0] q_a,q_b;
+
+//---output----//
+reg   [7:0]   outPort;
+reg           flag_flood;// multicast
+
+
+
+//-------------state-------------//
+reg   [3:0]   transmit_state;
+
+parameter           idle                  = 4'd0,
+                    read_action_s         = 4'd1,
+                    wait_write_rule_s     = 4'd2,
+                    wait_transmit_s       = 4'd3,
+                    transmit_pkt_s        = 4'd4,
+                    wait_write_rule_ram_s = 4'd5,
+                    wait_transmit_ram_s   = 4'd6,
+                    wait_ram_1_s          = 4'd7,
+                    wait_ram_2_s          = 4'd8,
+                    transmit_pkt_ram_s    = 4'd9,
+                    discard_s             = 4'd10;
+                    
+                    
+                    
+
+
+
+always @ (posedge clk or negedge reset)
+begin
+  if(!reset)
+    begin
+        um2cdp_rule_wrreq <= 1'b0;
+        um2cdp_data_valid <= 1'b0;
+        um2cdp_data       <= 139'b0;
+        
+        transmit_fifo_rden  <= 1'b0;
+        action_fifo_rden    <= 1'b0;
+        outPort     <= 8'd0;
+        flag_flood  <= 1'b0;
+        rden_a  <= 1'b0;
+        rden_b  <= 1'b0;
+        wren_a  <= 1'b0;
+        wren_b  <= 1'b0;
+        data_a  <= 139'b0;
+        data_b  <= 139'b0;
+        addr_a  <= 8'd0;
+        addr_b  <= 8'd0;
+        
+        transmit_state <= idle;
+        
+    end
+  else
+    begin
+        case(transmit_state)
+          idle:
+          begin
+              flag_flood        <= 1'b0;
+              addr_a            <= 8'd0;
+              um2cdp_data_valid <= 1'b0;
+              if(action_fifo_empty == 1'd0)
+                begin
+                    action_fifo_rden <= 1'b1;
+                    transmit_state <= read_action_s;
+                end
+          end
+          read_action_s:
+          begin
+              action_fifo_rden <= 1'b0;
+              
+              if(action_fifo_out[3:0] == 4'hf)  //  multicast
+                begin
+                    flag_flood      <= 1'b1;
+                    outPort         <= 8'd1;
+                    transmit_state  <= wait_write_rule_s;
+                end
+              else begin
+                  case(action_fifo_out[3:0])
+                    4'd1:begin
+                        transmit_state  <= wait_write_rule_s;
+                        outPort         <= 4'd1;
+                    end
+                    4'd2:begin
+                        transmit_state  <= wait_write_rule_s;
+                        outPort         <= 4'd2;
+                    end
+                    4'd4:begin
+                        transmit_state  <= wait_write_rule_s;
+                        outPort         <= 4'd4;
+                    end
+                    4'd8:begin
+                        transmit_state  <= wait_write_rule_s;
+                        outPort         <= 4'd8;
+                    end
+                    default: begin
+                        transmit_state      <= discard_s;
+                        transmit_fifo_rden  <= 1'b1;
+                    end
+                  endcase
+              end
+               
+          end
+          wait_write_rule_s:
+          begin            
+              if(cdp2um_rule_usedw <= 5'd30)
+                begin
+                    um2cdp_rule_wrreq <= 1'b1;
+                    um2cdp_rule       <= {26'b0,outPort[3:0]};
+                    
+                    transmit_state <= wait_transmit_s;
+                end
+          end
+          wait_transmit_s:
+          begin
+              um2cdp_rule_wrreq <= 1'b0;
+              if(cdp2um_tx_enable == 1'b1)
+                begin
+                    transmit_fifo_rden  <= 1'b1;
+                    transmit_state      <= transmit_pkt_s;
+                end
+          end
+          transmit_pkt_s:
+          begin
+              um2cdp_data_valid <= 1'b1;
+              um2cdp_data       <= transmit_fifo_out;
+              if(flag_flood  == 1'b1)
+                begin
+                    data_a  <= transmit_fifo_out;
+                    wren_a  <= 1'b1;
+                    addr_a  <= addr_a + 8'd1;
+                    outPort <= 8'd2;
+                end
+              
+              if(transmit_fifo_out[138:136] == 3'b110)
+                begin
+                    transmit_fifo_rden <= 1'b0;
+                    if(flag_flood == 1'b1)
+                      begin
+                          transmit_state <= wait_write_rule_ram_s;
+                      end
+                    else
+                      begin
+                          transmit_state <= idle;
+                      end
+                end
+          end
+          wait_write_rule_ram_s:
+          begin
+              wren_a <= 1'b0;
+              um2cdp_data_valid <= 1'b0;
+              if(cdp2um_rule_usedw <= 5'd30)
+                begin
+                    um2cdp_rule_wrreq <= 1'b1;
+                    um2cdp_rule <= {26'b0,outPort[3:0]};
+                    
+                    transmit_state <= wait_transmit_ram_s;
+                end
+          end
+          wait_transmit_ram_s:
+          begin
+              um2cdp_rule_wrreq <= 1'b0;
+              if(cdp2um_tx_enable == 1'b1)
+                begin
+                    rden_a <= 1'b1;
+                    addr_a <= 8'd1;
+                    transmit_state <= wait_ram_1_s;
+                end
+          end
+          wait_ram_1_s:
+          begin
+              transmit_state <= wait_ram_2_s;
+              addr_a <= addr_a + 8'd1;
+          end
+          wait_ram_2_s:
+          begin
+              transmit_state <= transmit_pkt_ram_s;
+              addr_a <= addr_a + 8'd1;
+          end
+          transmit_pkt_ram_s:
+          begin
+              addr_a <= addr_a + 8'd1;
+              um2cdp_data_valid <= 1'b1;
+              um2cdp_data <= q_a;
+              
+              if(q_a[138:136] == 3'b110)
+                begin
+                    rden_a <= 1'b0;
+                    if(outPort < 8'd5)
+                      begin
+                          outPort <= outPort << 8'd1;
+                          transmit_state <= wait_write_rule_ram_s;
+                      end
+                    else
+                      begin
+                          transmit_state <= idle;
+                      end
+                end
+          end
+          discard_s:
+          begin
+              if(transmit_fifo_out[138:136] == 3'b110)
+                begin
+                    transmit_fifo_rden <= 1'b0;
+                    transmit_state <= idle;
+                end
+          end
+          default:
+          begin
+              transmit_state <= idle;
+          end
+        endcase
+    end
+end
+
+
+
+//-----------fifo------------//
+fifo_139_256 trans_pkt_fifo(
+.aclr(!reset),
+.clock(clk),
+.data(pkt),
+.rdreq(transmit_fifo_rden),
+.wrreq(pkt_valid),
+.empty(transmit_fifo_empty),
+.full(),
+.q(transmit_fifo_out),
+.usedw(transmit_fifo_usedw)
+);
+
+fifo_16_256 action_fifo(
+.aclr(!reset),
+.clock(clk),
+.data(action),
+.rdreq(action_fifo_rden),
+.wrreq(action_valid),
+.empty(action_fifo_empty),
+.full(),
+.q(action_fifo_out),
+.usedw(action_fifo_usedw)
+); 
+
+ram_139_256 trans_pkt_ram(
+.address_a(addr_a),
+.address_b(addr_b),
+.clock(clk),
+.data_a(data_a),
+.data_b(data_b),
+.rden_a(rden_a),
+.rden_b(rden_b),
+.wren_a(wren_a),
+.wren_b(wren_b),
+.q_a(q_a),
+.q_b(q_b)
+);
+
+
+
+
+
+
+endmodule
