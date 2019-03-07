@@ -9,7 +9,8 @@ from __future__ import division # for / and //
 from collections import Counter # for merge dict
 from itertools import permutations    # for N! permutations
 import numpy as np
-from tools import Init  # call Init function
+import operator # substitute the cmp function in Python2.7
+from tools import Init, Init_OpenFlow  # call Init function
 
 def HashIdxPrefix(string):
     idxFlag = 0     # 0 is exact, -1 is wildcard, else is prefix
@@ -101,10 +102,13 @@ def FindP_Np_wildcard(FieldList, Lm, N, RulepDicOld):    #FieldList[i] <- [RID, 
     p = max(MemDic, key=MemDic.get)
     return (p, NpDic[p][0], MemDic, NpDic[p][1])
 
-def MaxCompressedPresent(FieldInfoList, FileList):
+def MaxCompressedPresent(DataFlag, FieldInfoList, FileList, LAll):
     ResultList = []
     for m in range(len(FileList)):
-        RuleList, linenum = Init(FileList[m]) # [RID, sa, da, sp, dp, prtcl]
+        if LAll == 104: # 5-tuple
+            RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
+        elif LAll == 253:   # OpenFlow1.0
+            RuleList, linenum = Init_OpenFlow(FileList[m]) # RuleList[i] <- [RID, in_port...]
         N = len(RuleList)
         M = 0
         for n in range(len(FieldInfoList)):
@@ -112,7 +116,7 @@ def MaxCompressedPresent(FieldInfoList, FileList):
                 wildcardFlag = RuleList[i][n+1].find('*')
                 if wildcardFlag != -1:
                     M += len(RuleList[i][n+1]) - wildcardFlag
-        ResultList.append((FileList[m], M / (104 * N)))
+        ResultList.append((FileList[m], M / (LAll * N)))
     return ResultList
 
 '''
@@ -125,14 +129,15 @@ def CountWildcardMatrix(AllFieldList, L, N, stride_s, cluster_n):   # AllFieldLi
         for j in range(0, L-(L%stride_s), stride_s):
             tmpwildcardMatrixFlag = True
             for i in range(0, cluster_n):
-                if cmp(AllFieldList[n + i][j:j+stride_s], '*'*stride_s) != 0:
+                #if cmp(AllFieldList[n + i][j:j+stride_s], '*'*stride_s) != 0:
+                if not operator.eq(AllFieldList[n + i][j:j+stride_s], '*'*stride_s):
                     tmpwildcardMatrixFlag = False
                     break
             if tmpwildcardMatrixFlag == True:
                 wildcardMatrixCount += 1
     return wildcardMatrixCount
 
-def CombinationFind(RuleList, N, FieldInfoList, foundFieldDic, RulepDicOld, stride_s, cluster_n):
+def CombinationFind(RuleList, N, FieldInfoList, LAll, foundFieldDic, RulepDicOld, stride_s, cluster_n):
     tmpFieldList = []
     tmpNumList = []
     tmpresult = []
@@ -145,7 +150,7 @@ def CombinationFind(RuleList, N, FieldInfoList, foundFieldDic, RulepDicOld, stri
                     FieldList.append([RuleList[i][0], RuleList[i][n+1], wildcardFlag])
             Lm = FieldInfoList[n][1]
             p, Np, MemDic, RulepDic =  FindP_Np_wildcard(FieldList, Lm, len(FieldList), {})
-            tmpresult.append((Lm, FieldInfoList[n][0], (p*Np) / (104*N), p, Np))  # 104 is five-tuple bit length
+            tmpresult.append((Lm, FieldInfoList[n][0], (p*Np) / (LAll*N), p, Np))  # 104 is five-tuple bit length, 253 is OpenFlow1.0 match length
             tmpNumList.append((p*Np) // (stride_s*cluster_n))     # Greedy choice way, or: (p*Np) // (stride_s*cluster_n)
             tmpFieldList.append([n, RulepDic])
             #print('n = ', n)
@@ -165,13 +170,15 @@ def CombinationFind(RuleList, N, FieldInfoList, foundFieldDic, RulepDicOld, stri
     
     return (foundFieldDicNew, RulepDicNew, tmpresultItem)
 
-def CombinationHorizontal(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n):
+def CombinationHorizontal(FieldInfoList, FileList, LAll, CombinationNum, stride_s, cluster_n):
     ResultList = []
     RIDOrderList = []
     
     for m in range(len(FileList)):
-        RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
-        #L = 104
+        if LAll == 104: # 5-tuple
+            RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
+        elif LAll == 253:   # OpenFlow1.0
+            RuleList, linenum = Init_OpenFlow(FileList[m]) # RuleList[i] <- [RID, in_port...]
         N = len(RuleList)
         CombinationResult = []
         AllRuleSet = set([item[0] for item in RuleList])   # Init: all RID
@@ -179,7 +186,7 @@ def CombinationHorizontal(FieldInfoList, FileList, CombinationNum, stride_s, clu
         foundFieldDic = {}
         RulepDicOld = {}
         for c in range(CombinationNum):
-            foundFieldDicNew, RulepDicNew, tmpresultItem = CombinationFind(RuleList, N, FieldInfoList, foundFieldDic, RulepDicOld, stride_s, cluster_n) # tmpresultItem <- (Lm, FieldName, p*Np / 104*N, p, Np)
+            foundFieldDicNew, RulepDicNew, tmpresultItem = CombinationFind(RuleList, N, FieldInfoList, LAll, foundFieldDic, RulepDicOld, stride_s, cluster_n) # tmpresultItem <- (Lm, FieldName, p*Np / LAll*N, p, Np)
             if RulepDicNew == {} :
                 break
             foundFieldDic = foundFieldDicNew
@@ -216,24 +223,26 @@ def CombinationHorizontal(FieldInfoList, FileList, CombinationNum, stride_s, clu
             ##print('wildcardMatrixCount', wildcardMatrixCount)
             #M = wildcardMatrixCount * stride_s * cluster_n
             '''
-            tmpResultDic[c] = M / (104*N)
+            tmpResultDic[c] = M / (LAll*N)
             tmpRIDOrderDic[c] = tmplist
         for c in range(len(CombinationResult), CombinationNum):
-            tmpResultDic[c] = M / (104*N)
+            tmpResultDic[c] = M / (LAll*N)
             tmpRIDOrderDic[c] = tmplist
-        print('Horizontal',FileList[m],M / (104*N))
+        print('Horizontal',FileList[m],M / (LAll*N))
         #print(tmpResultDic)
         ResultList.append(tmpResultDic)
         RIDOrderList.append(tmpRIDOrderDic)
     return (ResultList, RIDOrderList)
 
-def CombinationVertical(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n):
+def CombinationVertical(FieldInfoList, FileList, LAll, CombinationNum, stride_s, cluster_n):
     ResultList = []
     RIDOrderList = []
     
     for m in range(len(FileList)):
-        RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
-        #L = 104
+        if LAll == 104: # 5-tuple
+            RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
+        elif LAll == 253:   # OpenFlow1.0
+            RuleList, linenum = Init_OpenFlow(FileList[m]) # RuleList[i] <- [RID, in_port...]
         N = len(RuleList)
         CombinationResult = []
         AllRuleSet = set([item[0] for item in RuleList])   # Init: all RID
@@ -244,7 +253,7 @@ def CombinationVertical(FieldInfoList, FileList, CombinationNum, stride_s, clust
         foundFieldDic = {}
         RulepDicOld = {}
         for c in range(CombinationNum):
-            foundFieldDicNew, RulepDicNew, tmpresultItem = CombinationFind(RuleList, N, FieldInfoList, foundFieldDic, RulepDicOld, stride_s, cluster_n) # tmpresultItem <- (Lm, FieldName, p*Np / 104*N, p, Np)
+            foundFieldDicNew, RulepDicNew, tmpresultItem = CombinationFind(RuleList, N, FieldInfoList, LAll, foundFieldDic, RulepDicOld, stride_s, cluster_n) # tmpresultItem <- (Lm, FieldName, p*Np / LAll*N, p, Np)
             if RulepDicNew == {} :
                 break
             RuleElseSet = RuleElseSet - set(RulepDicNew)
@@ -277,23 +286,26 @@ def CombinationVertical(FieldInfoList, FileList, CombinationNum, stride_s, clust
             ##print('wildcardMatrixCount',wildcardMatrixCount)
             #M = wildcardMatrixCount * stride_s * cluster_n
             '''
-            tmpResultDic[c] = M / (104*N)
+            tmpResultDic[c] = M / (LAll*N)
             tmpRIDOrderDic[c] = tmpcurrentlist
         for c in range(len(CombinationResult), CombinationNum):
-            tmpResultDic[c] = M / (104*N)
+            tmpResultDic[c] = M / (LAll*N)
             tmpRIDOrderDic[c] = tmpcurrentlist
-        print('Vertical', FileList[m],M / (104*N))
+        print('Vertical', FileList[m],M / (LAll*N))
         ResultList.append(tmpResultDic)
         RIDOrderList.append(tmpRIDOrderDic)
     return (ResultList, RIDOrderList)
     
-def CombinationMix(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n):
+def CombinationMix(FieldInfoList, FileList, LAll, CombinationNum, stride_s, cluster_n):
     ResultList = []
     RIDOrderList = []
+    AdditionList = []
     
     for m in range(len(FileList)):
-        RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
-        #L = 104
+        if LAll == 104: # 5-tuple
+            RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
+        elif LAll == 253:   # OpenFlow1.0
+            RuleList, linenum = Init_OpenFlow(FileList[m]) # RuleList[i] <- [RID, in_port...]
         N = len(RuleList)
         v_CombinationResult = []
         AllRuleSet = set([item[0] for item in RuleList])   # Init: all RID
@@ -302,7 +314,7 @@ def CombinationMix(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
         v_foundFieldDic = {}
         v_RulepDicOld = {}
         for cv in range(CombinationNum):
-            v_foundFieldDicNew, v_RulepDicNew, v_tmpresultItem = CombinationFind(RuleList, N, FieldInfoList, v_foundFieldDic, v_RulepDicOld, stride_s, cluster_n)
+            v_foundFieldDicNew, v_RulepDicNew, v_tmpresultItem = CombinationFind(RuleList, N, FieldInfoList, LAll, v_foundFieldDic, v_RulepDicOld, stride_s, cluster_n)
             if v_RulepDicNew == {} :  # can not find field to compress
                 break
             #------------------------------------------------------------------
@@ -310,12 +322,12 @@ def CombinationMix(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
             h_RulepDicOld = v_RulepDicNew
             h_CombinationResult = [(tuple(v_RulepDicNew.keys()), v_tmpresultItem)]    # Add the first item
             for ch in range(CombinationNum - 1):
-                h_foundFieldDicNew, h_RulepDicNew, h_tmpresultItem = CombinationFind(RuleList, N, FieldInfoList, h_foundFieldDic, h_RulepDicOld, stride_s, cluster_n)
+                h_foundFieldDicNew, h_RulepDicNew, h_tmpresultItem = CombinationFind(RuleList, N, FieldInfoList, LAll, h_foundFieldDic, h_RulepDicOld, stride_s, cluster_n)
                 if h_RulepDicNew == {}: # can not find field to compress
                     break
                 h_foundFieldDic = h_foundFieldDicNew
                 h_RulepDicOld = h_RulepDicNew   #!!!
-                h_CombinationResult.append((tuple(h_RulepDicNew.keys()), h_tmpresultItem)) # tmpresultItem <- (Lm, FieldName, p*Np / 104*N, p, Np)
+                h_CombinationResult.append((tuple(h_RulepDicNew.keys()), h_tmpresultItem)) # tmpresultItem <- (Lm, FieldName, p*Np / LAll*N, p, Np)
                 
             M = 0
             h_tmpResultDic = {}
@@ -375,7 +387,7 @@ def CombinationMix(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
             #print('wildcardMatrixCount',wildcardMatrixCount)
             #M = wildcardMatrixCount * stride_s * cluster_n
             '''
-            v_tmpResultDic[cv] = M / (104*N)
+            v_tmpResultDic[cv] = M / (LAll*N)
             v_tmpRIDOrderDic[cv] = tuple(tmpcurrentlist)
         for cv in range(len(v_CombinationResult), CombinationNum):
             # Order RID
@@ -391,19 +403,22 @@ def CombinationMix(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n)
             M = 0
             for cN in range(0, len(v_CombinationResult)):
                 M += v_CombinationResult[cN][cv][1]
-            v_tmpResultDic[cv] = M / (104*N)
+            v_tmpResultDic[cv] = M / (LAll*N)
             v_tmpRIDOrderDic[cv] = tuple(tmpcurrentlist)
-        print('Mix', FileList[m],M / (104*N), len(tmpcurrentlist), N, N/linenum, len(v_CombinationResult))
+        print('Mix', FileList[m],M / (LAll*N), len(tmpcurrentlist), N, N/linenum, len(v_CombinationResult))
         #print(v_tmpResultDic)
         ResultList.append(v_tmpResultDic)
         RIDOrderList.append(v_tmpRIDOrderDic)
-    return (ResultList, RIDOrderList)
+        AdditionList.append(LAll*N)
+    return (ResultList, RIDOrderList, AdditionList)
 
-def Combination_ViolentSearch(FieldInfoList, FileList, CombinationNum, stride_s, cluster_n):
+def Combination_ViolentSearch(FieldInfoList, FileList, LAll, CombinationNum, stride_s, cluster_n):
     ResultList = []
     for m in range(len(FileList)):
-        RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
-        L = 104     # five-tuple
+        if LAll == 104: # 5-tuple
+            RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
+        elif LAll == 253:   # OpenFlow1.0
+            RuleList, linenum = Init_OpenFlow(FileList[m]) # RuleList[i] <- [RID, in_port...]
         N = len(RuleList)
         
         if N < cluster_n:
@@ -417,42 +432,198 @@ def Combination_ViolentSearch(FieldInfoList, FileList, CombinationNum, stride_s,
         maxItem = ()
         for Item in permutationList:
             tmpAllFieldList = [''.join(RuleList[n][1:]) for n in Item]
-            wildcardMatrixCount = CountWildcardMatrix(tmpAllFieldList, L, N, stride_s, cluster_n)
+            wildcardMatrixCount = CountWildcardMatrix(tmpAllFieldList, LAll, N, stride_s, cluster_n)
             if MaxwildcardMatrixCount < wildcardMatrixCount:
                 MaxwildcardMatrixCount = wildcardMatrixCount
                 maxItem = Item
         M = MaxwildcardMatrixCount * stride_s *cluster_n
-        ResultList.append((FileList[m], M / (104 * N), maxItem))
+        ResultList.append((FileList[m], M / (LAll * N), maxItem))
         print('maxItem',[''.join(RuleList[n][1:]) for n in maxItem])
-        print('ViolentSearch', FileList[m],M / (104*N))
+        print('ViolentSearch', FileList[m],M / (LAll*N))
     return ResultList
 
-def OrderRuleList(FieldInfoList, FileList, RIDOrderList, CombinationNum, stride_s, cluster_n):
+def OrderRuleList(FieldInfoList, FileList, LAll, RIDOrderList, CombinationNum, stride_s, cluster_n):
     if len(FileList) != len(RIDOrderList):
         print('Error')
         return False
     for m in range(len(FileList)):
-        RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
+        if LAll == 104: # 5-tuple
+            RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
+        elif LAll == 253:   # OpenFlow1.0
+            RuleList, linenum = Init_OpenFlow(FileList[m]) # RuleList[i] <- [RID, in_port...]
         fw = open('Order_'+str(CombinationNum)+'_'+str(stride_s)+'_'+str(cluster_n)+FileList[m], 'w')
         for n in RIDOrderList[m][CombinationNum-1]:
             fw.write('\t'.join(RuleList[n][1:])+'\n')
         fw.close()
     return True
 
-def CountResultRule(FieldInfoList, FileList, RIDOrderList, CombinationNum, stride_s, cluster_n):
+def CountResultRule(FieldInfoList, FileList, LAll, RIDOrderList, CombinationNum, stride_s, cluster_n):
     if len(FileList) != len(RIDOrderList):
         print('Error')
         return []
     CountResultList = []
     for m in range(len(FileList)):
-        RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
-        L = 104     # five-tuple
+        if LAll == 104: # 5-tuple
+            RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
+        elif LAll == 253:   # OpenFlow1.0
+            RuleList, linenum = Init_OpenFlow(FileList[m]) # RuleList[i] <- [RID, in_port...]
         N = len(RuleList)
         
         OldAllFieldList = [''.join(RuleList[n][1:]) for n in range(N)]
-        OldwildcardMatrixCount = CountWildcardMatrix(OldAllFieldList, L, N, stride_s, cluster_n)
+        OldwildcardMatrixCount = CountWildcardMatrix(OldAllFieldList, LAll, N, stride_s, cluster_n)
         
         tmpAllFieldList = [''.join(RuleList[n][1:]) for n in RIDOrderList[m][CombinationNum-1]]
-        wildcardMatrixCount = CountWildcardMatrix(tmpAllFieldList, L, N, stride_s, cluster_n)
-        CountResultList.append((FileList[m], (wildcardMatrixCount*stride_s*cluster_n) / (104 * N), (OldwildcardMatrixCount*stride_s*cluster_n) / (104 * N)))
+        wildcardMatrixCount = CountWildcardMatrix(tmpAllFieldList, LAll, N, stride_s, cluster_n)
+        CountResultList.append((FileList[m], (wildcardMatrixCount*stride_s*cluster_n) / (LAll * N), (OldwildcardMatrixCount*stride_s*cluster_n) / (LAll * N)))
     return CountResultList
+
+def CombinationMix_MaxPadding(FieldInfoList, FileList, LAll, CombinationNum, stride_s, cluster_n):
+    ResultList = []
+    RIDOrderList = []
+    WOMPList = []   # without MaxPadding
+    
+    for m in range(len(FileList)):
+        if LAll == 104: # 5-tuple
+            RuleList, linenum = Init(FileList[m]) # RuleList[i] <- [RID, sa, da, sp, dp, prtcl]
+        elif LAll == 253:   # OpenFlow1.0
+            RuleList, linenum = Init_OpenFlow(FileList[m]) # RuleList[i] <- [RID, in_port...]
+        N = len(RuleList)
+        v_CombinationResult = []
+        AllRuleSet = set([item[0] for item in RuleList])   # Init: all RID
+        RuleElseSet = AllRuleSet
+        
+        v_foundFieldDic = {}
+        v_RulepDicOld = {}
+        M_mp_All = 0
+        for cv in range(CombinationNum):
+            v_foundFieldDicNew, v_RulepDicNew, v_tmpresultItem = CombinationFind(RuleList, N, FieldInfoList, LAll, v_foundFieldDic, v_RulepDicOld, stride_s, cluster_n)
+            if v_RulepDicNew == {} :  # can not find field to compress
+                break
+            #------------------------------------------------------------------
+            h_foundFieldDic = v_foundFieldDicNew
+            h_RulepDicOld = v_RulepDicNew
+            h_CombinationResult = [(tuple(v_RulepDicNew.keys()), v_tmpresultItem, [])]    # Add the first item
+            for ch in range(CombinationNum - 1):
+                h_foundFieldDicNew, h_RulepDicNew, h_tmpresultItem = CombinationFind(RuleList, N, FieldInfoList, LAll, h_foundFieldDic, h_RulepDicOld, stride_s, cluster_n)
+                if h_RulepDicNew == {}: # can not find field to compress
+                    break
+                
+                #---Max Padding---
+                m_MaxPaddingResult = []
+                #print('T->', len(h_RulepDicNew), len(h_RulepDicOld))
+                if (len(h_RulepDicNew) / len(h_RulepDicOld)) < (2/3) :
+                    m_foundFieldDic = h_foundFieldDic
+                    tmpRuleElseSet = set(h_RulepDicOld) - set(h_RulepDicNew)
+                    m_RulepDicOld = dict(zip(tmpRuleElseSet, [1]*len(tmpRuleElseSet)))
+                    for cm in range(len(FieldInfoList) - len(m_foundFieldDic)):
+                        m_foundFieldDicNew, m_RulepDicNew, m_tmpresultItem = CombinationFind(RuleList, N, FieldInfoList, LAll, m_foundFieldDic, m_RulepDicOld, stride_s, cluster_n)
+                        if m_RulepDicNew == {}:
+                            break
+                        m_foundFieldDic = m_foundFieldDicNew
+                        m_RulepDicOld = m_RulepDicNew
+                        m_MaxPaddingResult.append((tuple(m_RulepDicNew.keys()), m_tmpresultItem))
+                #-----------------
+                
+                h_foundFieldDic = h_foundFieldDicNew
+                h_RulepDicOld = h_RulepDicNew   #!!!
+                h_CombinationResult.append((tuple(h_RulepDicNew.keys()), h_tmpresultItem, m_MaxPaddingResult)) # tmpresultItem <- (Lm, FieldName, p*Np / LAll*N, p, Np)
+                
+            M = 0
+            h_tmpResultDic = {}
+            tmplist = []
+            for ch in range(len(h_CombinationResult)):
+                '''
+                FieldName = h_CombinationResult[ch][1][1]
+                pNum = h_CombinationResult[ch][1][-1]
+                pLen = h_CombinationResult[ch][1][-2]
+                print(cv, ch, pLen, pNum, FieldName)
+                '''
+                tmplist = list(h_CombinationResult[ch][0])
+                tmplist.sort()
+                M = 0
+                for cr in range(ch, 0, -1):
+                    tmplt = list(set(h_CombinationResult[cr-1][0]) - set(h_CombinationResult[cr][0]))
+                    tmplt.sort()
+                    tmplist += tmplt
+                    tmpNum = h_CombinationResult[cr][1][-1]
+                    tmpLen = h_CombinationResult[cr][1][-2]
+                    M += (tmpLen - tmpLen%stride_s) * (tmpNum - tmpNum%cluster_n)       # each field length of five-tuple is a power of 2, find wildcard-PE from behind
+                tmpNum = h_CombinationResult[0][1][-1]
+                tmpLen = h_CombinationResult[0][1][-2]
+                M += (tmpLen - tmpLen%stride_s) * (tmpNum - tmpNum%cluster_n)
+                h_tmpResultDic[ch] = (tuple(tmplist), M)
+            
+            #---Max Padding---
+            M_mp = 0
+            for ch in range(len(h_CombinationResult)):
+                m_MaxPaddingResult  = h_CombinationResult[ch][2]
+                if m_MaxPaddingResult != []:
+                    for cm in range(len(m_MaxPaddingResult)):
+                        tmpNum = m_MaxPaddingResult[cm][1][-1]
+                        tmpLen = m_MaxPaddingResult[cm][1][-2]
+                        #print('MP',ch, cm, tmpLen, tmpNum, m_MaxPaddingResult[cm][1][1])
+                        M_mp += (tmpLen - tmpLen%stride_s) * (tmpNum - tmpNum%cluster_n)
+            M += M_mp
+            h_tmpResultDic[len(h_CombinationResult)-1] = (tuple(tmplist), M)
+            M_mp_All += M_mp
+            #-----------------
+            
+            for ch in range(len(h_CombinationResult), CombinationNum):
+                h_tmpResultDic[ch] = (tuple(tmplist), M)
+            #------------------------------------------------------------------
+            RuleElseSet = RuleElseSet - set(v_RulepDicNew)
+            v_RulepDicOld = dict(zip(RuleElseSet, [1]*len(RuleElseSet)))
+            v_CombinationResult.append(h_tmpResultDic)
+            if v_RulepDicOld == {} :
+                break
+        #print(v_CombinationResult)
+        #print('len(v_CombinationResult)', len(v_CombinationResult))
+        M = 0
+        v_tmpResultDic = {}
+        v_tmpRIDOrderDic = {}
+        tmpcurrentlist = list(AllRuleSet)
+        for cv in range(len(v_CombinationResult)):
+            # Order RID
+            tmpList = []
+            for cr in range(0, cv):
+                tmpDic = v_CombinationResult[cr]
+                tmplt = list(tmpDic[cv][0])  # has been sorted !
+                tmpList += tmplt
+            tmplt = list(AllRuleSet - set(tmpList))
+            tmplt.sort()
+            tmpcurrentlist = tmpList + tmplt
+            # Compute M
+            M = 0
+            for cN in range(0, cv+1):
+                M += v_CombinationResult[cN][cv][1]
+            '''
+            #tmpAllFieldList = [''.join(RuleList[n][1:]) for n in tmpcurrentlist]
+            #wildcardMatrixCount = CountWildcardMatrix(tmpAllFieldList, L, N, stride_s, cluster_n)
+            #print('wildcardMatrixCount',wildcardMatrixCount)
+            #M = wildcardMatrixCount * stride_s * cluster_n
+            '''
+            v_tmpResultDic[cv] = M / (LAll*N)
+            v_tmpRIDOrderDic[cv] = tuple(tmpcurrentlist)
+        for cv in range(len(v_CombinationResult), CombinationNum):
+            # Order RID
+            tmpList = []
+            for cr in range(0, len(v_CombinationResult)):
+                tmpDic = v_CombinationResult[cr]
+                tmplt = list(tmpDic[cv][0])  # has been sorted !
+                tmpList += tmplt
+            tmplt = list(AllRuleSet - set(tmpList))
+            tmplt.sort()
+            tmpcurrentlist = tmpList + tmplt
+            # Compute M
+            M = 0
+            for cN in range(0, len(v_CombinationResult)):
+                M += v_CombinationResult[cN][cv][1]
+            v_tmpResultDic[cv] = M / (LAll*N)
+            v_tmpRIDOrderDic[cv] = tuple(tmpcurrentlist)
+        
+        print('Mix', FileList[m],M / (LAll*N), len(tmpcurrentlist), N, N/linenum, len(v_CombinationResult))
+        #print(v_tmpResultDic)
+        ResultList.append(v_tmpResultDic)
+        RIDOrderList.append(v_tmpRIDOrderDic)
+        WOMPList.append((M - M_mp_All) / (LAll*N))
+    return (ResultList, RIDOrderList, WOMPList)
